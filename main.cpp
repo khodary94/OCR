@@ -7,25 +7,33 @@
 //
 
 #include <iostream>
+#include <fstream>
 #include <opencv2/opencv.hpp>
 
-#define FORE_THRESH 160
+#define FORE_THRESH 100
+
+struct Blob{
+    int minY, maxY,
+    minX, maxX;
+    int blob_number;
+    int size;
+};
 
 void printImg(cv::Mat in, std::string title){
     cv::namedWindow(title, CV_WINDOW_AUTOSIZE);
     cv::imshow(title, in);
 }
 
-/*void doBinary(cv::Mat &image){
+void doBinary(cv::Mat &image){
     std::cout << "=>Converting Image to binary...\n";
     for(int i = 0; i < image.rows; i++){
         for(int j = 0; j < image.cols; j++){
             uchar *pixel = &image.at<uchar>(i, j);
-            if(*pixel > FORE_THRESH) *pixel = 255;
+            if(*pixel < FORE_THRESH) *pixel = 255;
             else *pixel = 0;
         }
     }
-}*/
+}
 
 void updateAccum(int a, int b, int x, int y, std::vector<std::vector<int>>& vec){
     for(int i = 0; i <= x; i++){
@@ -35,7 +43,7 @@ void updateAccum(int a, int b, int x, int y, std::vector<std::vector<int>>& vec)
     }
 }
 
-void CCL2(const cv::Mat& image, std::vector<std::vector<int>>& accum){
+void CCL(const cv::Mat& image, std::vector<std::vector<int>>& accum){
 
     std::cout << "=>Doing CCL...";
 
@@ -86,6 +94,106 @@ void CCL2(const cv::Mat& image, std::vector<std::vector<int>>& accum){
     std::cout << "Done!\n";
 }
 
+int checkBlob(int a, const std::vector<Blob>& vec){
+    for(int i = 0; i < vec.size(); i++){
+        if(a == vec[i].blob_number) return i;
+    }
+    return - 1;
+}
+
+int createBlobs(const std::vector<std::vector<int>>& accum, std::vector<Blob>& vecBlobs){
+    //bool flag = false;
+    std::cout << "=>Creating Blobs...";
+    int blobCount = 0;
+    Blob blob;
+    for(int i = 0; i < accum.size(); i++){
+        for(int j = 0; j < accum[i].size(); j++){
+            if(accum[i][j] == 0) continue;
+
+            int exist = checkBlob(accum[i][j], vecBlobs);
+            if(exist == - 1){
+                blob.blob_number = accum[i][j];
+
+                blob.minY = i;
+                blob.maxY = i;
+                blob.minX = j;
+                blob.maxX = j;
+
+                //std::cout << "First Point: " << cv::Point(j, i) << '\t';
+
+                blob.size = 1;
+                vecBlobs.push_back(blob);
+                blobCount++;
+            }else{
+                if(vecBlobs[exist].minX > j){
+                    vecBlobs[exist].minX = j;
+                    //std::cout << "y_minX: " << cv::Point(j, i) << '\t';
+                }
+                if(vecBlobs[exist].maxX < j){
+                    vecBlobs[exist].maxX = j;
+                    //std::cout << "y_maxX: " << cv::Point(j, i) << '\t';
+                }
+                if(vecBlobs[exist].minY > i){
+                    vecBlobs[exist].minY = i;
+                    //std::cout << "x_minY: " << cv::Point(j, i) << '\t';
+                }
+                if(vecBlobs[exist].maxY < i){
+                    vecBlobs[exist].maxY = i;
+                    //std::cout << "x_maxY: " << cv::Point(j, i) << '\t';
+                }
+                //vecBlobs[exist].endPoint = cv::Point(j, i);
+                vecBlobs[exist].size += 1;
+            }
+        }
+    }
+    std::cout << " Blob Count: " << blobCount << " Done!\n";
+    return blobCount;
+}
+
+void createLetters(const std::vector<std::vector<int>>& accum, const std::vector<Blob>& vecBlobs, std::vector<cv::Mat>& letters){
+    for(int i = 0; i < vecBlobs.size(); i++){
+        int w_min, l_min, w_max, l_max;
+        int l, w;
+
+        l_min = vecBlobs[i].minY;
+        l_max = vecBlobs[i].maxY;
+        w_min = vecBlobs[i].minX;
+        w_max = vecBlobs[i].maxX;
+        l = l_max - l_min;
+        w = w_max - w_min;
+
+        cv::Mat temp(l, w, CV_LOAD_IMAGE_GRAYSCALE);
+        for(int j = 0; j < l; j++){
+            for(int k = 0; k < w; k++){
+
+                int z = accum[j + l_min][k + w_min];
+                if( z > 0)
+                    temp.at<uchar>(j, k) = 0;
+                else
+                    temp.at<uchar>(j, k) = 255;
+            }
+        }
+        letters.push_back(temp);
+    }
+}
+
+bool findCorners(cv::Mat& image, std::vector<Blob>& b){
+    bool flag = false;
+    std::cout << "=>Finding Corners...";
+    for(int i = 0; i < b.size(); i++){
+        //sflag = checkPoints(b[i]);
+        cv::circle(image, cv::Point(b[i].minX, b[i].minY), 2, cv::Scalar(0, 255, 0));
+        cv::circle(image, cv::Point(b[i].minX, b[i].maxY), 2, cv::Scalar(0, 255, 0));
+        cv::circle(image, cv::Point(b[i].maxX, b[i].minY), 2, cv::Scalar(0, 255, 0));
+        cv::circle(image, cv::Point(b[i].maxX, b[i].maxY), 2, cv::Scalar(0, 255, 0));
+
+        cv::rectangle(image, cv::Point(b[i].minX, b[i].minY), cv::Point(b[i].maxX, b[i].maxY), cv::Scalar(0, 0, 255));
+    }
+
+    std::cout << "Done!\n";
+    return flag;
+}
+
 int main(int argc, const char * argv[]) {
     // insert code here...
     std::cout << "Hello, World!\n";
@@ -98,15 +206,31 @@ int main(int argc, const char * argv[]) {
         std::cout <<  "Could not open or find the image\n";
         return -1;
     }
-    //cv::Mat imResize(imColor.rows/2, imColor.cols/2, imColor.type());
-    //cv::Mat imResize2(imGrayscale.rows/2, imGrayscale.cols/2, imGrayscale.type());
-    //cv::resize(imGrayscale, imResize2, imResize2.size(), 0, 0);
-    //cv::resize(imColor, imResize, imResize.size(), 0, 0);
-    cv::threshold(imGrayscale, imBinary, FORE_THRESH, 255, 0);
-    //doBinary(imGrayscale);
+    /*cv::Mat imResize(imColor.rows/2, imColor.cols/2, imColor.type());
+    cv::Mat imResize2(imGrayscale.rows/2, imGrayscale.cols/2, imGrayscale.type());
+    cv::resize(imGrayscale, imResize2, imResize2.size(), 0, 0);
+    cv::resize(imColor, imResize, imResize.size(), 0, 0);
+    cv::threshold(imGrayscale, imBinary, FORE_THRESH, 255, 0);*/
 
-    printImg(imGrayscale, "Grayscale Image");
-    printImg(imBinary, "Binary");
+    std::vector<std::vector<int>> accum;
+    std::vector<Blob> vecBlobs;
+    std::vector<cv::Mat> letters;
+
+    doBinary(imGrayscale);
+    CCL(imGrayscale, accum);
+
+    createBlobs(accum, vecBlobs);
+    findCorners(imColor, vecBlobs);
+    createLetters(accum, vecBlobs, letters);
+
+    for(int i = 0; i < letters.size(); i++){
+        printImg(letters[i], "Letter" + std::to_string(i));
+    }
+    //cv::imwrite("/Users/macbookpro/Desktop/out.jpg", imGrayscale);
+    cv::imwrite("/Users/macbookpro/Desktop/outcol.jpg", imColor);
+    //printImg(imColor, "Colored Image");
+    //printImg(imGrayscale, "Grayscale Image");
+    //printImg(imBinary, "Binary");
     cv::waitKey();
     return 0;
 }
