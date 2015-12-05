@@ -24,6 +24,44 @@ void printImg(cv::Mat in, std::string title){
     cv::imshow(title, in);
 }
 
+int mod(int x, int k){
+    int temp = x%k;
+    if(temp < 0) temp = x + k;
+
+    return temp;
+}
+
+void smoothTran(const cv::Mat &image, cv::Mat& result){
+
+    std::cout << "=>Smoothing Image...";
+    int x = image.rows;
+    int y = image.cols;
+    float pixel = 0;
+
+    result = image;
+
+    const int kx = 3, ky = 3;
+    float kernel[kx][ky] = {
+        {1/9.0, 1/9.0, 1/9.0},
+        {1/9.0, 1/9.0, 1/9.0},
+        {1/9.0, 1/9.0, 1/9.0},
+    }; //blur image using average filter 3x3
+
+    //the use of mod is to not go out of bound
+    for(int i = 0; i < x; i++){
+        for(int j = 0; j < y; j++){
+            for(int i2 = - 1; i2 <= kx/2; i2++){
+                for(int j2 = - 1; j2 <= ky/2; j2++){
+                    pixel += float(image.at<uchar>(mod(i + i2, x - 1), mod(j + j2, y - 1))) * kernel[i2 + 1][j2 + 1];
+                }
+            }
+            result.at<uchar>(i, j) = pixel;
+            pixel = 0;
+        }
+    }
+    std::cout << "Done!\n";
+}
+
 void doBinary(cv::Mat &image){
     std::cout << "=>Converting Image to binary...\n";
     for(int i = 0; i < image.rows; i++){
@@ -36,8 +74,8 @@ void doBinary(cv::Mat &image){
 }
 
 void updateAccum(int a, int b, int x, int y, std::vector<std::vector<int>>& vec){
-    for(int i = 0; i <= x; i++){
-        for(int j = 0; j <= y; j++){
+    for(int i = 0; i < vec.size(); i++){
+        for(int j = 0; j < vec[i].size(); j++){
             if(vec[i][j] == b) vec[i][j] = a;
         }
     }
@@ -159,8 +197,8 @@ void createLetters(const std::vector<std::vector<int>>& accum, const std::vector
         l_max = vecBlobs[i].maxY;
         w_min = vecBlobs[i].minX;
         w_max = vecBlobs[i].maxX;
-        l = l_max - l_min;
-        w = w_max - w_min;
+        l = l_max - l_min + 1;
+        w = w_max - w_min + 1;
 
         cv::Mat temp(l, w, CV_LOAD_IMAGE_GRAYSCALE);
         for(int j = 0; j < l; j++){
@@ -213,11 +251,12 @@ int main(int argc, const char * argv[]) {
     cv::threshold(imGrayscale, imBinary, FORE_THRESH, 255, 0);*/
 
     std::vector<std::vector<int>> accum;
-    std::vector<Blob> vecBlobs;
     std::vector<cv::Mat> letters;
+    std::vector<Blob> vecBlobs;
 
-    doBinary(imGrayscale);
-    CCL(imGrayscale, accum);
+    smoothTran(imGrayscale, imBinary);
+    doBinary(imBinary);
+    CCL(imBinary, accum);
 
     createBlobs(accum, vecBlobs);
     findCorners(imColor, vecBlobs);
@@ -226,7 +265,7 @@ int main(int argc, const char * argv[]) {
     for(int i = 0; i < letters.size(); i++){
         printImg(letters[i], "Letter" + std::to_string(i));
     }
-    //cv::imwrite("/Users/macbookpro/Desktop/out.jpg", imGrayscale);
+    cv::imwrite("/Users/macbookpro/Desktop/out.jpg", imBinary);
     cv::imwrite("/Users/macbookpro/Desktop/outcol.jpg", imColor);
     //printImg(imColor, "Colored Image");
     //printImg(imGrayscale, "Grayscale Image");
