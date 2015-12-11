@@ -21,11 +21,11 @@ struct Font{
 	int ch_count;
 };
 
-int matchWindows(cv::Mat&, cv::Mat&);
-int minIndex(int[], int);
-void matchLetters(vector<cv::Mat>&, vector<cv::Mat>&, string&);
-void init_templates(vector<cv::Mat>&, string);
 vector<cv::Mat> visionize(cv::Mat, bool, string, int);
+int matchWindows(cv::Mat&, cv::Mat&);
+void matchLetters(vector<cv::Mat>&, vector<cv::Mat>&, string&, int);
+int minIndex(int[], int);
+void init_templates(vector<cv::Mat>&, string, int);
 void read_from_file(string, vector<Font>&);
 void write_to_file(string, vector<Font>&);
 
@@ -325,16 +325,17 @@ int main(int argc, const char * argv[]) {
 				cout << i+1 << ". " << fonts[i].name << endl;
 			int sel;
 			cin >> sel;
+			int font_chars = fonts[sel-1].ch_count;
 
 			//Initialize templates
 			templates_dir = "templates/" + fonts[sel-1].name;
-			init_templates(templates, templates_dir);
+			init_templates(templates, templates_dir, font_chars);
 		
 			//Read letters
 			letters = visionize(imColor, import, "", 0);							//load letters and save their images in their folder
 		
 			//Match letters to templates
-			matchLetters(letters, templates, result);
+			matchLetters(letters, templates, result, font_chars);
 			cout << "\nThe program reads:\n" << result << endl;
 		}
 	}
@@ -433,11 +434,12 @@ int minIndex(int ar[], int n){
 	return mini;
 }
 
-void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, string& output){
+void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, string& output, int letter_count){
 	cout << "matching characers...";
 	for(int i=0; i<letters.size(); i++){
 		cv::Mat curLetter = letters[i];
-		int coeffs[107];
+		int* coeffs;
+		coeffs = new int[letter_count];
 		for(int j=0; j<template_letters.size(); j++){
 			cv::Mat tempLetter = template_letters[j].clone();
 			coeffs[j] = matchWindows(curLetter, tempLetter);
@@ -446,15 +448,15 @@ void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, s
 			//printImg(tempLetter, ""+lmap[j]);
 			//cv::waitKey(0);
 		}
-		int ind = minIndex(coeffs, 107);
+		int ind = minIndex(coeffs, letter_count);
 		output += lmap[ind];
 	}
 	cout << "Done!\n";
 }
 
-void init_templates(vector<cv::Mat>& template_letters, string dir){
+void init_templates(vector<cv::Mat>& template_letters, string dir, int letter_count){
 	cout << "=>Loading letter templates...";
-	for(int i=0; i<107; i++){
+	for(int i=0; i<letter_count; i++){
 		cv::Mat temp;
 		temp = cv::imread(dir+"/_"+std::to_string(i)+".png", CV_LOAD_IMAGE_GRAYSCALE);
 		template_letters.push_back(temp);
