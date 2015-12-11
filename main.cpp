@@ -9,8 +9,25 @@
 #include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
+#include "char_map.h"
 
 #define FORE_THRESH 100
+
+using namespace std;
+
+
+struct Font{
+	string name;
+	int ch_count;
+};
+
+int matchWindows(cv::Mat&, cv::Mat&);
+int minIndex(int[], int);
+void matchLetters(vector<cv::Mat>&, vector<cv::Mat>&, string&);
+void init_templates(vector<cv::Mat>&, string);
+vector<cv::Mat> visionize(cv::Mat, bool, string, int);
+void read_from_file(string, vector<Font>&);
+void write_to_file(string, vector<Font>&);
 
 struct Blob{
     int minY, maxY,
@@ -59,11 +76,11 @@ void smoothTran(const cv::Mat &image, cv::Mat& result){
             pixel = 0;
         }
     }
-    std::cout << "Done!\n";
+    cout << "Done!\n";
 }
 
 void doBinary(cv::Mat &image){
-    std::cout << "=>Converting Image to binary...\n";
+    std::cout << "=>Converting Image to binary...";
     for(int i = 0; i < image.rows; i++){
         for(int j = 0; j < image.cols; j++){
             uchar *pixel = &image.at<uchar>(i, j);
@@ -71,6 +88,7 @@ void doBinary(cv::Mat &image){
             else *pixel = 0;
         }
     }
+	cout << "Done!\n";
 }
 
 void updateAccum(int a, int b, int x, int y, std::vector<std::vector<int>>& vec){
@@ -189,6 +207,7 @@ int createBlobs(const std::vector<std::vector<int>>& accum, std::vector<Blob>& v
 }
 
 void createLetters(const std::vector<std::vector<int>>& accum, const std::vector<Blob>& vecBlobs, std::vector<cv::Mat>& letters){
+	cout << "=>Filing the letters vector...";
     for(int i = 0; i < vecBlobs.size(); i++){
         int w_min, l_min, w_max, l_max;
         int l, w;
@@ -213,6 +232,7 @@ void createLetters(const std::vector<std::vector<int>>& accum, const std::vector
         }
         letters.push_back(temp);
     }
+	cout << "Done!\n";
 }
 
 bool findCorners(cv::Mat& image, std::vector<Blob>& b){
@@ -233,43 +253,211 @@ bool findCorners(cv::Mat& image, std::vector<Blob>& b){
 }
 
 int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
+	
+	vector<cv::Mat> letters;
+	vector<cv::Mat> templates;
+	vector<Font> fonts;
+	cv::Mat imColor;
+	string result;
 
-    cv::Mat imColor, imGrayscale, imBinary;
-    imColor = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
-    imGrayscale = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);
+	if( argc != 2)
+    {
+		cout <<" No image argument is given to the program" << endl;
+		system("pause");
+		return -1;
+	}
+    cout << "Program has started!\n";
 
-    if(!imColor.data) {         // Check for invalid input
-        std::cout <<  "Could not open or find the image\n";
+	imColor = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
+
+	if(! imColor.data )                              // Check for invalid input
+    {
+        cout <<  "Could not open or find the image" << std::endl ;
+		system("pause");
         return -1;
     }
-    /*cv::Mat imResize(imColor.rows/2, imColor.cols/2, imColor.type());
-    cv::Mat imResize2(imGrayscale.rows/2, imGrayscale.cols/2, imGrayscale.type());
-    cv::resize(imGrayscale, imResize2, imResize2.size(), 0, 0);
-    cv::resize(imColor, imResize, imResize.size(), 0, 0);
-    cv::threshold(imGrayscale, imBinary, FORE_THRESH, 255, 0);*/
 
-    std::vector<std::vector<int>> accum;
-    std::vector<cv::Mat> letters;
-    std::vector<Blob> vecBlobs;
+	cout << "Please choose one of the following options:\n"<<
+			"1. Carry out OCR using one of the existing fonts\n"<<
+			"2. Import a new font for OCR\n";
 
+	int choice;
+	cin >> choice;
+	bool import = choice-1;
+	
+	read_from_file("templates/Fonts.txt", fonts);
+	string templates_dir;
+
+	if(import){
+		cout << "Please enter the name of the new font:\n";
+		string input;
+		cin >> input;
+		templates_dir = "templates/" + input;
+
+		Font temp;
+		temp.name = input;
+		temp.ch_count = 0;
+
+		for(int i=0; i<4; i++){
+			string samples[4] = {"templates/uppercase.png", "templates/lowercase.png", "templates/numbers.png", "templates/symbols.png"};
+			int offsets[4] = {0, 26, 54, 64};
+			imColor = cv::imread(samples[i], CV_LOAD_IMAGE_COLOR);
+			
+			if(! imColor.data )                              // Check for invalid input
+			{
+				cout <<  "Could not open or find the image" << std::endl ;
+				system("pause");
+				return -1;
+			}
+			letters = visionize(imColor, import, templates_dir, offsets[i]);				//save image templates in their designated folder
+			temp.ch_count += letters.size();
+		}
+		
+		fonts.push_back(temp);
+		write_to_file("templates/Fonts.txt", fonts);
+	}
+	else{
+		if(fonts.size() == 0)
+			cout << "no fonts are imported for carrying our OCR!\n";
+		else{
+			cout << "Please select one of the existing fonts templates for performing OCR\n";
+			for(int i=0; i<fonts.size(); i++)
+				cout << i+1 << ". " << fonts[i].name << endl;
+			int sel;
+			cin >> sel;
+
+			//Initialize templates
+			templates_dir = "templates/" + fonts[sel-1].name;
+			init_templates(templates, templates_dir);
+		
+			//Read letters
+			letters = visionize(imColor, import, "", 0);							//load letters and save their images in their folder
+		
+			//Match letters to templates
+			matchLetters(letters, templates, result);
+			cout << "\nThe program reads:\n" << result << endl;
+		}
+	}
+
+	system("pause");
+    return 0;
+}
+
+vector<cv::Mat> visionize(cv::Mat imColor, bool import, string outloc, int offset){
+
+	cv::Mat imGrayscale, imBinary;
+	vector<std::vector<int>> accum;
+    vector<cv::Mat> letters;
+    vector<Blob> vecBlobs;
+
+	//converting to grayscale and smoothing
+	cv::cvtColor( imColor, imGrayscale, CV_BGR2GRAY );
+	cv::Mat imTester = imGrayscale.clone();
     smoothTran(imGrayscale, imBinary);
     doBinary(imBinary);
+
+	//--------------------------------------------------------------------------------------------------------------------
+	//CCL algorithm
     CCL(imBinary, accum);
-
-    createBlobs(accum, vecBlobs);
+	createBlobs(accum, vecBlobs);
     findCorners(imColor, vecBlobs);
-    createLetters(accum, vecBlobs, letters);
-
-    for(int i = 0; i < letters.size(); i++){
-        printImg(letters[i], "Letter" + std::to_string(i));
+	createLetters(accum, vecBlobs, letters);
+	string dir;
+	if(import)
+		dir = outloc;
+	else
+		dir = "letters";
+	for(int i = 0; i < letters.size(); i++){				//write the found letters to files for testing and debugging
+		cv::imwrite(dir+"/_" + std::to_string(offset+i) + ".png", letters[i]);
+		//printImg(templates[30], "_" + std::to_string(1)); 
     }
-    cv::imwrite("/Users/macbookpro/Desktop/out.jpg", imBinary);
-    cv::imwrite("/Users/macbookpro/Desktop/outcol.jpg", imColor);
-    //printImg(imColor, "Colored Image");
-    //printImg(imGrayscale, "Grayscale Image");
-    //printImg(imBinary, "Binary");
-    cv::waitKey();
-    return 0;
+	cv::imwrite("out.png", imBinary);
+    cv::imwrite("outletters.png", imColor);
+	return letters;
+}
+
+void read_from_file(string fname, vector<Font>& ar){
+	ifstream infile;
+	infile.open(fname);
+
+	if(!infile.fail()){
+		while(!infile.eof()){
+			Font temp;
+			infile >> temp.name;
+			infile >> temp.ch_count;
+			if(temp.name != "")
+				ar.push_back(temp);
+		}
+	}
+}
+
+void write_to_file(string fname, vector<Font>& ar){
+	ofstream outfile;
+	outfile.open(fname);
+
+	if(!outfile.fail()){
+		for(int i=0; i<ar.size(); i++){
+			if(i!=0)
+				outfile << endl;
+			outfile << ar[i].name << '\t' << ar[i].ch_count;
+		}
+	}
+}
+
+int matchWindows(cv::Mat& src, cv::Mat& temp){
+	//float diff_acc=0, src_acc=0, temp_acc=0;
+	int coeff = 0;
+	cv::resize(temp, temp, cv::Size(src.cols, src.rows));
+	for(int i=0; i<src.rows; i++){
+		for(int j=0; j<src.cols; j++){
+			int src_val = src.at<uchar>(i, j);
+			int temp_val = temp.at<uchar>(i, j);
+			coeff += std::pow(src_val - temp_val, 2.0);
+			//diff_acc += std::pow(src_val - temp_val, 2.0);
+			//src_acc += std::pow(src_val, 2.0);
+			//temp_acc += std::pow(temp_val, 2.0);
+		}
+	}
+	//return diff_acc / (src_acc * temp_acc);
+	return coeff;
+}
+
+int minIndex(int ar[], int n){
+	int min = ar[0], mini = 0;
+	for(int i=1; i<n; i++){
+		if(ar[i] < min){
+			min = ar[i];
+			mini = i;
+		}
+	}
+	return mini;
+}
+
+void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, string& output){
+	cout << "matching characers...";
+	for(int i=0; i<letters.size(); i++){
+		cv::Mat curLetter = letters[i];
+		int coeffs[107];
+		for(int j=0; j<template_letters.size(); j++){
+			cv::Mat tempLetter = template_letters[j].clone();
+			coeffs[j] = matchWindows(curLetter, tempLetter);
+			//cout << coeffs[j] << " ";
+			//printImg(curLetter, "letter");
+			//printImg(tempLetter, ""+lmap[j]);
+			//cv::waitKey(0);
+		}
+		int ind = minIndex(coeffs, 107);
+		output += lmap[ind];
+	}
+	cout << "Done!\n";
+}
+
+void init_templates(vector<cv::Mat>& template_letters, string dir){
+	cout << "=>Loading letter templates...";
+	for(int i=0; i<107; i++){
+		cv::Mat temp;
+		temp = cv::imread(dir+"/_"+std::to_string(i)+".png", CV_LOAD_IMAGE_GRAYSCALE);
+		template_letters.push_back(temp);
+	}
+	cout << "Done!\n";
 }
