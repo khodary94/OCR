@@ -116,8 +116,7 @@ int main(int argc, const char * argv[]) {
 		temp.ch_count = 0;
 
 		for(int i=0; i<3; i++){
-			string samples[4] = {"templates/uppercase.png", "templates/lowercase.png", "templates/numbers.png"};
-			int offsets[4] = {0, 29, 62};
+			string samples[3] = {"templates/ASCII_1.png", "templates/ASCII_2.png", "templates/ASCII_3.png"};
 			imColor = cv::imread(samples[i], CV_LOAD_IMAGE_COLOR);
 			
 			if(! imColor.data )                              // Check for invalid input
@@ -126,7 +125,7 @@ int main(int argc, const char * argv[]) {
 				system("pause");
 				return -1;
 			}
-			letters = visionize(imColor, import, templates_dir, offsets[i]);				//save image templates in their designated folder
+			letters = visionize(imColor, import, templates_dir, temp.ch_count);				//save image templates in their designated folder
 			temp.ch_count += letters.size();
 		}
 		

@@ -225,19 +225,8 @@ void createLetters(const std::vector<std::vector<int>>& accum, const std::vector
 }
 
 int drawRect(cv::Mat& image, std::vector<Blob>& b){
-    //bool flag = false;
     std::cout << "=>Finding Corners...";
 	int maxHeight = 0;
-    /*for(int i = 0; i < b.size(); i++)
-		if(maxHeight < b[i].height())
-			maxHeight = b[i].height();
-	for(int i = 0; i < b.size(); i++){
-		if(b[i].height() < maxHeight){
-			b[i].minY = b[i].maxY - maxHeight;
-			if(b[i].minY < 0)
-				b[i].minY = 0;
-		}
-	}*/
 
 	for(int i = 0; i < b.size(); i++){
         //cv::circle(image, cv::Point(b[i].minX, b[i].minY), 2, cv::Scalar(0, 255, 0));
