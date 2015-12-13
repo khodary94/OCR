@@ -155,7 +155,6 @@ int main(int argc, const char * argv[]) {
 			cout << "\nThe program reads:\n" << result << endl;
 		}
 	}
-
 	system("pause");
     return 0;
 }
@@ -206,9 +205,11 @@ void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, s
 			cv::Mat tempLetter = template_letters[j].clone();
 			coeffs[j] = matchWindows(curLetter, tempLetter);
 			//cout << coeffs[j] << " ";
-			//printImg(curLetter, "letter");
-			//printImg(tempLetter, ""+lmap[j]);
-			//cv::waitKey(0);
+			/*if(coeffs[j]>9999999){
+				printImg(curLetter, "letter");
+				printImg(tempLetter, "");
+				cv::waitKey(0);
+			}*/
 		}
 		int ind = minIndex(coeffs, letter_count);
 		output += char(ind + 33);
@@ -217,8 +218,12 @@ void matchLetters(vector<cv::Mat>& letters, vector<cv::Mat>& template_letters, s
 }
 
 int matchWindows(cv::Mat& src, cv::Mat& temp){
-	//float diff_acc=0, src_acc=0, temp_acc=0;
 	int coeff = 0;
+	float scalex = (float)temp.cols / src.cols;
+	float scaley = (float)temp.rows / src.rows;
+	if(abs(scalex - scaley)>0.5)
+		return 9999999999999999;
+
 	cv::resize(temp, temp, cv::Size(src.cols, src.rows));
 	for(int i=0; i<src.rows; i++){
 		for(int j=0; j<src.cols; j++){
@@ -230,7 +235,6 @@ int matchWindows(cv::Mat& src, cv::Mat& temp){
 			//temp_acc += std::pow(temp_val, 2.0);
 		}
 	}
-	//return diff_acc / (src_acc * temp_acc);
 	return coeff;
 }
 

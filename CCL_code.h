@@ -3,7 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 
-#define FORE_THRESH 100
+#define FORE_THRESH 150
 #define NEAR_BLOB   30
 
 struct Blob{
